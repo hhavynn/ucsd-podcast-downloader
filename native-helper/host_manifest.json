@@ -1,0 +1,9 @@
+{
+  "name": "com.ucsd.podcast.downloader",
+  "description": "UCSD Podcast Downloader native helper",
+  "path": "/PLACEHOLDER — run install.sh to fill this in",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://PLACEHOLDER_EXTENSION_ID/"
+  ]
+}

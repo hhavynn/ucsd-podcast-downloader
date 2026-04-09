@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>UCSD Podcast Downloader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon48.png" alt="" class="logo">
+    <h1>UCSD Podcast Downloader</h1>
+  </header>
+
+  <!-- State: searching (shown briefly while popup.js loads storage) -->
+  <div id="state-loading" class="state">
+    <p class="muted">Checking for stream&hellip;</p>
+  </div>
+
+  <!-- State: no stream detected yet -->
+  <div id="state-none" class="state hidden">
+    <p class="badge badge-none">No stream detected</p>
+    <p class="hint">Play a lecture video on this tab, then re-open the extension.</p>
+  </div>
+
+  <!-- State: stream found -->
+  <div id="state-found" class="state hidden">
+    <p class="badge badge-found">Stream detected</p>
+    <div class="info-block">
+      <span class="label">Title</span>
+      <span id="info-title" class="value"></span>
+    </div>
+    <div class="info-block">
+      <span class="label">URL</span>
+      <span id="info-url" class="value url-truncate"></span>
+    </div>
+    <div class="info-block">
+      <span class="label">Detected</span>
+      <span id="info-time" class="value muted"></span>
+    </div>
+    <button id="btn-copy">Copy URL</button>
+  </div>
+
+  <!-- Native host section — always visible, independent of stream state -->
+  <div class="divider"></div>
+  <section class="native-section">
+    <p class="section-label">Native Host</p>
+    <button id="btn-ping">Test Connection</button>
+    <p id="ping-result" class="ping-result hidden"></p>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>

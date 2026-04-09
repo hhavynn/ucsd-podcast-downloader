@@ -1,0 +1,166 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 320px;
+  padding: 14px 16px 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+  background: #fff;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+header .logo {
+  width: 20px;
+  height: 20px;
+}
+
+header h1 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ── States ── */
+.hidden { display: none !important; }
+
+.state { display: flex; flex-direction: column; gap: 10px; }
+
+/* ── Status badge ── */
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  width: fit-content;
+}
+
+.badge-none {
+  background: #f2f2f2;
+  color: #888;
+}
+
+.badge-found {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+/* ── Info rows ── */
+.info-block {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 4px;
+  align-items: baseline;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.value {
+  font-size: 13px;
+  color: #1a1a1a;
+  word-break: break-word;
+}
+
+/* URL gets a monospace treatment and truncates to one line */
+.url-truncate {
+  font-family: "SF Mono", "Consolas", monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  color: #555;
+}
+
+.muted { color: #999; }
+
+.hint {
+  color: #888;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── Copy button ── */
+button {
+  margin-top: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid #d0d0d0;
+  border-radius: 5px;
+  background: #f7f7f7;
+  cursor: pointer;
+  transition: background 0.1s;
+  align-self: flex-start;
+}
+
+button:hover  { background: #ececec; }
+button:active { background: #e0e0e0; }
+
+button.copied {
+  color: #1e7e34;
+  border-color: #a3d9a5;
+  background: #e6f4ea;
+}
+
+/* ── Native host section ── */
+.divider {
+  margin: 14px 0;
+  border: none;
+  border-top: 1px solid #e8e8e8;
+}
+
+.native-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Ping result line */
+.ping-result {
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+
+.ping-ok {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.ping-err {
+  background: #fdecea;
+  color: #c0392b;
+  word-break: break-word;
+}
