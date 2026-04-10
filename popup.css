@@ -51,14 +51,22 @@ header h1 {
   width: fit-content;
 }
 
-.badge-none {
-  background: #f2f2f2;
-  color: #888;
+.badge-none  { background: #f2f2f2; color: #888; }
+.badge-found { background: #e6f4ea; color: #1e7e34; }
+
+/* ── Empty state instructions ── */
+.hint-steps {
+  color: #666;
+  font-size: 12px;
+  line-height: 1.8;
+  padding-left: 18px;
 }
 
-.badge-found {
-  background: #e6f4ea;
-  color: #1e7e34;
+.hint-sub {
+  color: #aaa;
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: -2px;
 }
 
 /* ── Info rows ── */
@@ -83,28 +91,39 @@ header h1 {
   word-break: break-word;
 }
 
-/* URL gets a monospace treatment and truncates to one line */
-.url-truncate {
+.muted { color: #999; }
+
+/* Filename preview — monospace, single line */
+.filename-preview {
   font-family: "SF Mono", "Consolas", monospace;
   font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
-  color: #555;
 }
 
-.muted { color: #999; }
-
-.hint {
-  color: #888;
-  font-size: 12px;
+/* ── Stale warning ── */
+.stale-warning {
+  font-size: 11px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: #fff8e1;
+  color: #7a5800;
   line-height: 1.5;
+  border-left: 3px solid #f5c400;
 }
 
-/* ── Copy button ── */
+/* ── Button row ── */
+.btn-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+/* ── Buttons ── */
 button {
-  margin-top: 4px;
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 500;
@@ -112,12 +131,29 @@ button {
   border-radius: 5px;
   background: #f7f7f7;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.1s, opacity 0.1s;
   align-self: flex-start;
 }
 
 button:hover  { background: #ececec; }
 button:active { background: #e0e0e0; }
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Primary action button (Download) */
+.btn-primary {
+  background: #0064c8;
+  color: #fff;
+  border-color: #0050a0;
+  font-weight: 600;
+}
+
+.btn-primary:hover    { background: #0055b0; }
+.btn-primary:active   { background: #004494; }
+.btn-primary:disabled { background: #0064c8; } /* keep blue, just dimmed by opacity */
 
 button.copied {
   color: #1e7e34;
@@ -125,13 +161,40 @@ button.copied {
   background: #e6f4ea;
 }
 
-/* ── Native host section ── */
+/* ── Download result ── */
+.dl-result {
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+.dl-downloading {
+  background: #fff8e1;
+  color: #7a5800;
+}
+
+.dl-ok {
+  background: #e6f4ea;
+  color: #1e7e34;
+  word-break: break-all;
+}
+
+.dl-err {
+  background: #fdecea;
+  color: #c0392b;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* ── Divider ── */
 .divider {
   margin: 14px 0;
   border: none;
   border-top: 1px solid #e8e8e8;
 }
 
+/* ── Native host section ── */
 .native-section {
   display: flex;
   flex-direction: column;
@@ -146,7 +209,6 @@ button.copied {
   letter-spacing: 0.04em;
 }
 
-/* Ping result line */
 .ping-result {
   font-size: 12px;
   padding: 5px 8px;
@@ -154,13 +216,5 @@ button.copied {
   line-height: 1.4;
 }
 
-.ping-ok {
-  background: #e6f4ea;
-  color: #1e7e34;
-}
-
-.ping-err {
-  background: #fdecea;
-  color: #c0392b;
-  word-break: break-word;
-}
+.ping-ok  { background: #e6f4ea; color: #1e7e34; }
+.ping-err { background: #fdecea; color: #c0392b; word-break: break-word; }

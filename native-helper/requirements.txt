@@ -1,2 +1,1 @@
-# Milestone 3 (ping only): no third-party dependencies — stdlib only.
-# Milestone 4 will add: yt-dlp
+yt-dlp

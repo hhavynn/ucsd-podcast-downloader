@@ -1,0 +1,9 @@
+{
+    "name":  "com.ucsd.podcast.downloader",
+    "description":  "UCSD Podcast Downloader native helper",
+    "path":  "C:\\Users\\xiate\\Documents\\CS\\ucsd-podcast-downloader\\native-helper\\host.bat",
+    "type":  "stdio",
+    "allowed_origins":  [
+                            "chrome-extension://neidfnlihocbeimnnoimilcmbomkjmcb/"
+                        ]
+}

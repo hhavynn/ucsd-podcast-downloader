@@ -19,25 +19,39 @@
   <!-- State: no stream detected yet -->
   <div id="state-none" class="state hidden">
     <p class="badge badge-none">No stream detected</p>
-    <p class="hint">Play a lecture video on this tab, then re-open the extension.</p>
+    <ol class="hint-steps">
+      <li>Open a UCSD podcast or Canvas lecture page</li>
+      <li>Press Play on the video</li>
+      <li>Click this icon again</li>
+    </ol>
+    <p class="hint-sub">If you just pressed Play, wait a moment for the stream to start.</p>
   </div>
 
   <!-- State: stream found -->
   <div id="state-found" class="state hidden">
-    <p class="badge badge-found">Stream detected</p>
+    <p class="badge badge-found">Stream ready</p>
     <div class="info-block">
       <span class="label">Title</span>
       <span id="info-title" class="value"></span>
     </div>
     <div class="info-block">
-      <span class="label">URL</span>
-      <span id="info-url" class="value url-truncate"></span>
+      <span class="label">File</span>
+      <span id="info-filename" class="value muted filename-preview"></span>
     </div>
     <div class="info-block">
       <span class="label">Detected</span>
       <span id="info-time" class="value muted"></span>
     </div>
-    <button id="btn-copy">Copy URL</button>
+    <!-- Shown by JS when stream is >30 min old -->
+    <p id="stale-warning" class="stale-warning hidden">
+      Detected over 30 min ago &mdash; the stream URL may have expired.
+      If the download fails, reload the lecture page and try again.
+    </p>
+    <div class="btn-row">
+      <button id="btn-download" class="btn-primary">Download</button>
+      <button id="btn-copy">Copy URL</button>
+    </div>
+    <p id="dl-result" class="dl-result hidden"></p>
   </div>
 
   <!-- Native host section — always visible, independent of stream state -->

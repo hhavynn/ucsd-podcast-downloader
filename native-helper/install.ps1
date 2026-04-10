@@ -27,7 +27,10 @@ $manifest = [ordered]@{
     type            = "stdio"
     allowed_origins = @("chrome-extension://$ExtensionId/")
 }
-$manifest | ConvertTo-Json | Out-File -FilePath $ManifestPath -Encoding utf8NoBOM
+# Use .NET directly — PowerShell 5.1's Out-File -Encoding utf8 writes a BOM
+# which Chrome rejects. UTF8Encoding($false) gives BOM-free UTF-8.
+$json = $manifest | ConvertTo-Json
+[System.IO.File]::WriteAllText($ManifestPath, $json, (New-Object System.Text.UTF8Encoding $false))
 
 # Chrome finds Windows native hosts by looking up this registry key.
 # The key name is the host name; the default value is the path to the manifest JSON.
