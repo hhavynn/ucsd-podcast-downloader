@@ -1,7 +1,12 @@
-// Milestone 5: UX Polish
-// Stale detection, improved filename generation, full button locking during download.
+// Milestone 6: Live download progress
+// The popup now renders durable per-tab download state from chrome.storage.local.
 
 const STALE_MS = 30 * 60 * 1000; // warn after 30 minutes
+const IN_FLIGHT_STATUSES = new Set(["starting", "downloading", "merging"]);
+
+let activeTabId = null;
+let currentStreamData = null;
+let currentDownloadState = null;
 
 const el = {
   loading:      document.getElementById("state-loading"),
@@ -13,6 +18,10 @@ const el = {
   staleWarning: document.getElementById("stale-warning"),
   copy:         document.getElementById("btn-copy"),
   download:     document.getElementById("btn-download"),
+  progress:     document.getElementById("download-progress"),
+  progressStatus: document.getElementById("progress-status"),
+  progressFill: document.getElementById("progress-fill"),
+  progressMeta: document.getElementById("progress-meta"),
   dlResult:     document.getElementById("dl-result"),
   ping:         document.getElementById("btn-ping"),
   pingResult:   document.getElementById("ping-result"),
@@ -27,6 +36,21 @@ function showState(name) {
 function formatTime(ts) {
   const d = new Date(ts);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function clampPercent(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return null;
+  return Math.max(0, Math.min(100, value));
+}
+
+function formatPercent(value) {
+  const percent = clampPercent(value);
+  if (percent == null) return "";
+  return Number.isInteger(percent) ? String(percent) : percent.toFixed(1).replace(/\.0$/, "");
+}
+
+function downloadKey(tabId) {
+  return `download_${tabId}`;
 }
 
 // Strip common Kaltura/Canvas/UCSD suffixes from page titles and return a
@@ -46,117 +70,250 @@ function makeFilename(title) {
   return (name || "lecture") + ".mp4";
 }
 
-// ── Stream detection state ────────────────────────────────────────────────────
+function getCurrentFilename() {
+  if (!currentStreamData) return "lecture.mp4";
+  return currentStreamData.filename || makeFilename(currentStreamData.title || "lecture");
+}
 
-async function init() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) { showState("none"); return; }
+function renderStreamState(data) {
+  currentStreamData = data || null;
 
-  const key = `tab_${tab.id}`;
-  const result = await chrome.storage.local.get(key);
-  const data = result[key];
+  if (!data) {
+    showState("none");
+    return;
+  }
 
-  if (!data) { showState("none"); return; }
+  el.title.textContent = data.title || "Unknown";
+  el.filename.textContent = getCurrentFilename();
+  el.time.textContent = formatTime(data.detectedAt);
 
-  // Prefer the DOM-extracted filename stored at detection time.
-  // Fall back to deriving it from the tab title if extraction failed.
-  const filename = data.filename || makeFilename(data.title || "lecture");
-
-  el.title.textContent    = data.title || "Unknown";
-  el.filename.textContent = filename;
-  el.time.textContent     = formatTime(data.detectedAt);
-
-  // Warn if the stored URL is old enough that the KS token may have expired.
   const age = Date.now() - data.detectedAt;
   el.staleWarning.classList.toggle("hidden", age < STALE_MS);
 
   showState("found");
 }
 
-// ── Copy URL ──────────────────────────────────────────────────────────────────
-
-el.copy.addEventListener("click", () => {
-  // Retrieve the URL directly from storage rather than from a hidden DOM element.
-  chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-    if (!tab) return;
-    chrome.storage.local.get(`tab_${tab.id}`, (res) => {
-      const url = res[`tab_${tab.id}`]?.m3u8Url;
-      if (!url) return;
-      navigator.clipboard.writeText(url).then(() => {
-        el.copy.textContent = "Copied!";
-        el.copy.classList.add("copied");
-        setTimeout(() => {
-          el.copy.textContent = "Copy URL";
-          el.copy.classList.remove("copied");
-        }, 1500);
-      });
-    });
-  });
-});
-
-// ── Download ──────────────────────────────────────────────────────────────────
-
-el.download.addEventListener("click", async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return;
-
-  const stored = await chrome.storage.local.get(`tab_${tab.id}`);
-  const data = stored[`tab_${tab.id}`];
-  if (!data) { setDlState("error", "No stream found for this tab. Reload and play the video."); return; }
-
-  const url      = data.m3u8Url;
-  const filename = data.filename || makeFilename(data.title || "lecture");
-
-  setDlState("downloading");
-
-  let result;
-  try {
-    result = await chrome.runtime.sendMessage({ type: "DOWNLOAD_VIDEO", url, filename });
-  } catch (e) {
-    setDlState("error", `Extension error: ${e.message}\n\nTry reloading the extension.`);
+function setDlResult(kind, text = "") {
+  if (!text) {
+    el.dlResult.className = "dl-result hidden";
+    el.dlResult.textContent = "";
     return;
   }
 
-  if (result.ok) {
-    // Show just the filename, not the full path — the path can be very long.
-    const savedName = result.path.replace(/.*[\\/]/, "");
-    setDlState("done", `Saved: ${savedName} (${result.message})`);
-  } else {
-    setDlState("error", result.message);
-  }
-});
+  el.dlResult.textContent = text;
+  el.dlResult.className = `dl-result ${kind}`;
+}
 
-function setDlState(state, text = "") {
-  // Reset everything first.
-  el.download.disabled    = false;
+function buildProgressMeta(state) {
+  const parts = [];
+
+  if (state.downloadedBytesText) parts.push(state.downloadedBytesText);
+  if (state.speedText) parts.push(state.speedText);
+  if (state.etaText) parts.push(`ETA ${state.etaText}`);
+
+  return parts.join(" | ");
+}
+
+function renderDownloadState(state) {
+  currentDownloadState = state || null;
+  console.log("[popup] render download state ->", state);
+
+  el.download.disabled = false;
   el.download.textContent = "Download";
-  el.copy.disabled        = false;
-  el.dlResult.className   = "dl-result";
+  el.copy.disabled = false;
+  el.progress.classList.add("hidden");
+  el.progressStatus.textContent = "";
+  el.progressFill.style.width = "0%";
+  el.progressMeta.textContent = "";
+  el.progressMeta.classList.add("hidden");
 
-  switch (state) {
+  if (!state) {
+    setDlResult();
+    return;
+  }
+
+  const percent = clampPercent(state.progressPercent);
+  const meta = buildProgressMeta(state);
+  const inFlight = IN_FLIGHT_STATUSES.has(state.status);
+
+  el.progress.classList.remove("hidden");
+  el.progressFill.style.width = `${percent ?? 0}%`;
+  el.download.disabled = inFlight;
+  el.copy.disabled = inFlight;
+
+  if (inFlight) {
+    el.download.textContent = "Downloading...";
+  }
+
+  if (meta) {
+    el.progressMeta.textContent = meta;
+    el.progressMeta.classList.remove("hidden");
+  }
+
+  switch (state.status) {
+    case "starting":
+      el.progressStatus.textContent = state.message || "Preparing download...";
+      setDlResult();
+      break;
+
     case "downloading":
-      el.download.disabled    = true;
-      el.download.textContent = "Downloading…";
-      el.copy.disabled        = true;
-      el.dlResult.textContent = "Download in progress — keep this popup open.";
-      el.dlResult.classList.add("dl-downloading");
+      el.progressStatus.textContent = state.message || `Downloading... ${formatPercent(percent)}%`;
+      setDlResult("dl-downloading", "Download in progress.");
       break;
-    case "done":
-      el.dlResult.textContent = text;
-      el.dlResult.classList.add("dl-ok");
+
+    case "merging":
+      el.progressStatus.textContent = state.message || "Merging...";
+      setDlResult("dl-downloading", "Finalizing the video file.");
       break;
+
+    case "done": {
+      el.progressStatus.textContent = "Completed";
+      el.progressFill.style.width = "100%";
+      const savedName = state.path ? state.path.replace(/.*[\\/]/, "") : state.filename || getCurrentFilename();
+      const detail = state.message ? ` (${state.message})` : "";
+      setDlResult("dl-ok", `Saved: ${savedName}${detail}`);
+      break;
+    }
+
     case "error":
-      el.dlResult.textContent = text;
-      el.dlResult.classList.add("dl-err");
+      el.progressStatus.textContent = "Error";
+      setDlResult("dl-err", state.message || "Download failed.");
       break;
+
+    default:
+      el.progress.classList.add("hidden");
+      setDlResult();
   }
 }
 
-// ── Native host ping ──────────────────────────────────────────────────────────
+async function loadActiveTabState() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) {
+    activeTabId = null;
+    renderStreamState(null);
+    renderDownloadState(null);
+    return;
+  }
 
+  activeTabId = tab.id;
+  const streamKey = `tab_${activeTabId}`;
+  const dlKey = downloadKey(activeTabId);
+  const result = await chrome.storage.local.get([streamKey, dlKey]);
+
+  console.log("[popup] loaded state ->", {
+    tabId: activeTabId,
+    stream: result[streamKey],
+    download: result[dlKey],
+  });
+
+  renderStreamState(result[streamKey]);
+  renderDownloadState(result[dlKey]);
+}
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || activeTabId == null) return;
+
+  const streamKey = `tab_${activeTabId}`;
+  const dlKey = downloadKey(activeTabId);
+
+  if (changes[streamKey]) {
+    console.log("[popup] stream state change ->", changes[streamKey].newValue);
+    renderStreamState(changes[streamKey].newValue || null);
+  }
+
+  if (changes[dlKey]) {
+    console.log("[popup] download state change ->", changes[dlKey].newValue);
+    renderDownloadState(changes[dlKey].newValue || null);
+  }
+});
+
+// Copy URL
+el.copy.addEventListener("click", async () => {
+  if (activeTabId == null) return;
+
+  const result = await chrome.storage.local.get(`tab_${activeTabId}`);
+  const url = result[`tab_${activeTabId}`]?.m3u8Url;
+  if (!url) return;
+
+  await navigator.clipboard.writeText(url);
+  el.copy.textContent = "Copied!";
+  el.copy.classList.add("copied");
+  setTimeout(() => {
+    el.copy.textContent = "Copy URL";
+    el.copy.classList.remove("copied");
+  }, 1500);
+});
+
+// Download
+el.download.addEventListener("click", async () => {
+  if (activeTabId == null || !currentStreamData) return;
+  if (currentDownloadState && IN_FLIGHT_STATUSES.has(currentDownloadState.status)) return;
+
+  const url = currentStreamData.m3u8Url;
+  const filename = getCurrentFilename();
+  if (!url) {
+    renderDownloadState({
+      status: "error",
+      filename,
+      progressPercent: null,
+      speedText: "",
+      etaText: "",
+      downloadedBytesText: "",
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+      path: "",
+      message: "No stream found for this tab. Reload and play the video.",
+    });
+    return;
+  }
+
+  el.download.disabled = true;
+  el.download.textContent = "Downloading...";
+
+  let result;
+  try {
+    result = await chrome.runtime.sendMessage({
+      type: "DOWNLOAD_VIDEO",
+      tabId: activeTabId,
+      url,
+      filename,
+    });
+  } catch (e) {
+    renderDownloadState({
+      status: "error",
+      filename,
+      progressPercent: null,
+      speedText: "",
+      etaText: "",
+      downloadedBytesText: "",
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+      path: "",
+      message: `Extension error: ${e.message}\n\nTry reloading the extension.`,
+    });
+    return;
+  }
+
+  if (!result?.ok) {
+    renderDownloadState({
+      status: "error",
+      filename,
+      progressPercent: null,
+      speedText: "",
+      etaText: "",
+      downloadedBytesText: "",
+      startedAt: Date.now(),
+      updatedAt: Date.now(),
+      path: "",
+      message: result?.message || "Failed to start download.",
+    });
+  }
+});
+
+// Native host ping
 el.ping.addEventListener("click", async () => {
-  el.ping.disabled    = true;
-  el.ping.textContent = "Pinging…";
+  el.ping.disabled = true;
+  el.ping.textContent = "Pinging...";
   el.pingResult.className = "ping-result hidden";
 
   let result;
@@ -164,7 +321,7 @@ el.ping.addEventListener("click", async () => {
     result = await chrome.runtime.sendMessage({ type: "PING_NATIVE" });
   } catch (e) {
     setPingResult(false, `Extension error: ${e.message}`);
-    el.ping.disabled    = false;
+    el.ping.disabled = false;
     el.ping.textContent = "Test Connection";
     return;
   }
@@ -176,15 +333,13 @@ el.ping.addEventListener("click", async () => {
       : result.error
   );
 
-  el.ping.disabled    = false;
+  el.ping.disabled = false;
   el.ping.textContent = "Test Connection";
 });
 
 function setPingResult(ok, text) {
   el.pingResult.textContent = text;
-  el.pingResult.className   = `ping-result ${ok ? "ping-ok" : "ping-err"}`;
+  el.pingResult.className = `ping-result ${ok ? "ping-ok" : "ping-err"}`;
 }
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
-
-init();
+loadActiveTabState();

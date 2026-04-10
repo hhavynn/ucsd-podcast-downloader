@@ -3,7 +3,7 @@
   "name": "UCSD Podcast Downloader",
   "version": "0.1.0",
   "description": "Detects and downloads UCSD lecture streams.",
-  "permissions": ["webRequest", "storage", "tabs", "nativeMessaging", "scripting"],
+  "permissions": ["webRequest", "webNavigation", "storage", "tabs", "nativeMessaging", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "service_worker.js"
