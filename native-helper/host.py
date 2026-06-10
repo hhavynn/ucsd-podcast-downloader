@@ -6,12 +6,15 @@ Chrome Native Messaging protocol (stdio):
   Each message is a 4-byte little-endian uint32 (length), followed by
   that many UTF-8 bytes of JSON. Responses use the same format.
 
-Chrome launches this process fresh for every native messaging session
+Chrome/Edge launches this process fresh for every native messaging session
 and kills it when the extension disconnects.
 """
+# Allows `X | Y` type hints on Python 3.9 (macOS ships 3.9 on older systems).
+from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import struct
@@ -20,6 +23,19 @@ import sys
 import threading
 from collections import deque
 from pathlib import Path
+
+# On macOS the browser launches native hosts with its own stripped PATH.
+# Prepend the most common locations so yt-dlp is found regardless of how
+# the user installed it (Homebrew Apple Silicon, Homebrew Intel, pip --user).
+_EXTRA_PATHS = [
+    "/opt/homebrew/bin",                    # Homebrew Apple Silicon
+    "/usr/local/bin",                        # Homebrew Intel / manual installs
+    str(Path.home() / ".local" / "bin"),    # pip install --user
+    str(Path.home() / "bin"),
+]
+os.environ["PATH"] = ":".join(
+    _EXTRA_PATHS + [os.environ.get("PATH", "")]
+)
 
 # Log to stderr only - stdout is reserved for the Chrome message protocol.
 logging.basicConfig(
@@ -133,7 +149,7 @@ def _validate_download_request(tab_id, url: str) -> str | None:
     if ".m3u8" not in url:
         return "URL does not look like an HLS playlist (.m3u8 not found)."
     if not shutil.which("yt-dlp"):
-        return "yt-dlp not found. Install it with:\n  pip install yt-dlp\nThen restart Chrome."
+        return "yt-dlp not found. Install it with:\n  pip install yt-dlp\nThen restart your browser."
     return None
 
 

@@ -38,6 +38,10 @@ function extractPageMeta() {
 
 const META_RETRY_DELAYS_MS = [0, 300, 1000, 2500];
 const lectureContexts = new Map();
+// Tracks tabs where a detection is already in-flight to prevent a race between
+// two .m3u8 requests (master + sub-playlist) both passing the "already stored?"
+// check before either finishes, causing the wrong URL to be written last.
+const detectionInProgress = new Set();
 
 function ensureLectureContext(tabId) {
   let context = lectureContexts.get(tabId);
@@ -67,6 +71,9 @@ async function refreshCurrentLectureState(tabId, { reason, url, documentId } = {
   context.navigationVersion += 1;
   if (documentId !== undefined) context.currentDocumentId = documentId ?? null;
   if (url !== undefined) context.currentUrl = url ?? null;
+
+  // Cancel any in-flight detection so it doesn't write to storage after clearing.
+  detectionInProgress.delete(tabId);
 
   await chrome.storage.local.remove(`tab_${tabId}`);
   console.log(
@@ -116,6 +123,12 @@ async function handleDetectedPlaylist(details) {
   if (details.tabId < 0) return;
 
   const tabId = details.tabId;
+
+  // Synchronous fast-path: if another .m3u8 for this tab is already being
+  // processed, drop this one immediately — before any async work — so the
+  // first-arriving URL (typically the master playlist) wins.
+  if (detectionInProgress.has(tabId)) return;
+
   const key = `tab_${tabId}`;
   const context = ensureLectureContext(tabId);
 
@@ -133,39 +146,50 @@ async function handleDetectedPlaylist(details) {
     return;
   }
 
+  // Claim this detection slot after the storage read — a concurrent call could
+  // have claimed it while we were awaiting, so check again before proceeding.
+  if (detectionInProgress.has(tabId)) return;
+  detectionInProgress.add(tabId);
+
+  // Hold the lock through the storage write so no concurrent call can race the
+  // write window between extractPageMetaWithRetry completing and set() finishing.
   const navigationVersion = context.navigationVersion;
-  const meta = await extractPageMetaWithRetry(tabId, navigationVersion);
-
-  if (ensureLectureContext(tabId).navigationVersion !== navigationVersion) {
-    console.log(`[UCSD Downloader] tab ${tabId}: navigation changed during detection, discarding result.`);
-    return;
-  }
-
-  let filename = null;
-  if (meta?.courseCode && meta?.lectureLabel) {
-    const safe = (s) => s.replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim();
-    filename = `${safe(meta.courseCode)} - ${safe(meta.lectureLabel)}`;
-  }
-
-  let tab = null;
   try {
-    tab = await chrome.tabs.get(tabId);
-  } catch (err) {
-    console.warn(`[UCSD Downloader] tab ${tabId}: failed to read tab info - ${err.message}`);
+    const meta = await extractPageMetaWithRetry(tabId, navigationVersion);
+
+    if (ensureLectureContext(tabId).navigationVersion !== navigationVersion) {
+      console.log(`[UCSD Downloader] tab ${tabId}: navigation changed during detection, discarding result.`);
+      return;
+    }
+
+    let filename = null;
+    if (meta?.courseCode && meta?.lectureLabel) {
+      const safe = (s) => s.replace(/[<>:"/\\|?*\x00-\x1f]/g, "").trim();
+      filename = `${safe(meta.courseCode)} - ${safe(meta.lectureLabel)}`;
+    }
+
+    let tab = null;
+    try {
+      tab = await chrome.tabs.get(tabId);
+    } catch (err) {
+      console.warn(`[UCSD Downloader] tab ${tabId}: failed to read tab info - ${err.message}`);
+    }
+
+    const stored = {
+      m3u8Url: details.url,
+      detectedAt: Date.now(),
+      title: tab?.title || "Unknown",
+      filename,
+      documentId: details.documentId ?? context.currentDocumentId ?? null,
+      pageUrl: context.currentUrl ?? tab?.url ?? null,
+      navigationVersion,
+    };
+
+    await chrome.storage.local.set({ [key]: stored });
+    console.log(`[UCSD Downloader] tab ${tabId}: stored lecture state ->`, stored);
+  } finally {
+    detectionInProgress.delete(tabId);
   }
-
-  const stored = {
-    m3u8Url: details.url,
-    detectedAt: Date.now(),
-    title: tab?.title || "Unknown",
-    filename,
-    documentId: details.documentId ?? context.currentDocumentId ?? null,
-    pageUrl: context.currentUrl ?? tab?.url ?? null,
-    navigationVersion,
-  };
-
-  await chrome.storage.local.set({ [key]: stored });
-  console.log(`[UCSD Downloader] tab ${tabId}: stored lecture state ->`, stored);
 }
 
 // Broad URL filter; webRequest requires patterns at registration time.
@@ -341,7 +365,17 @@ async function handleDownloadDisconnect(tabId, record) {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   lectureContexts.delete(tabId);
+  detectionInProgress.delete(tabId);
   chrome.storage.local.remove([`tab_${tabId}`, `download_${tabId}`]);
+
+  // Disconnect any active native port for this tab and mark it terminal so the
+  // onDisconnect handler doesn't try to write state for a removed tab.
+  const record = activeDownloads.get(tabId);
+  if (record && !record.terminalWritten) {
+    record.terminalWritten = true;
+    try { record.port?.disconnect(); } catch (_) {}
+    activeDownloads.delete(tabId);
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

@@ -1,17 +1,54 @@
 #!/usr/bin/env bash
-# Registers the native messaging host with Chrome on macOS.
-# Usage: bash install.sh <EXTENSION_ID>
+# Registers the native messaging host with Chrome and/or Edge on macOS.
 #
-# Your extension ID is the 32-character string shown under the extension
-# name at chrome://extensions (e.g. abcdefghijklmnopqrstuvwxyzabcdef).
+# Usage:
+#   bash install.sh <CHROME_ID>                        # Chrome only (default)
+#   bash install.sh --edge <EDGE_ID>                   # Edge only
+#   bash install.sh <CHROME_ID> --edge <EDGE_ID>       # Both browsers
+#
+# Extension IDs are the 32-character strings shown in each browser's
+# extensions page (chrome://extensions or edge://extensions).
 
 set -euo pipefail
 
-EXTENSION_ID="${1:-}"
-if [[ -z "$EXTENSION_ID" ]]; then
-  echo "Usage: bash install.sh <EXTENSION_ID>"
+CHROME_ID=""
+EDGE_ID=""
+
+# Parse arguments.
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --edge)
+      shift
+      EDGE_ID="${1:-}"
+      if [[ -z "$EDGE_ID" ]]; then
+        echo "Error: --edge requires an extension ID argument"
+        exit 1
+      fi
+      shift
+      ;;
+    --*)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+    *)
+      if [[ -z "$CHROME_ID" ]]; then
+        CHROME_ID="$1"
+      else
+        echo "Unexpected argument: $1"
+        exit 1
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$CHROME_ID" && -z "$EDGE_ID" ]]; then
+  echo "Usage:"
+  echo "  bash install.sh <CHROME_ID>                  # Chrome only"
+  echo "  bash install.sh --edge <EDGE_ID>             # Edge only"
+  echo "  bash install.sh <CHROME_ID> --edge <EDGE_ID> # Both browsers"
   echo ""
-  echo "Find your extension ID at chrome://extensions"
+  echo "Find your extension ID at chrome://extensions or edge://extensions"
   exit 1
 fi
 
@@ -24,34 +61,53 @@ if [[ ! -f "$HOST_SCRIPT" ]]; then
   exit 1
 fi
 
-# Make host.py executable so Chrome can launch it directly.
+# Make host.py executable so browsers can launch it directly.
 chmod +x "$HOST_SCRIPT"
 
-# Chrome looks for host manifests in this directory on macOS.
-MANIFEST_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
-mkdir -p "$MANIFEST_DIR"
+# Writes a host manifest for one browser into the given directory.
+install_for_browser() {
+  local browser_name="$1"
+  local manifest_dir="$2"
+  local extension_id="$3"
 
-MANIFEST_PATH="$MANIFEST_DIR/com.ucsd.podcast.downloader.json"
+  mkdir -p "$manifest_dir"
+  local manifest_path="$manifest_dir/com.ucsd.podcast.downloader.json"
 
-cat > "$MANIFEST_PATH" <<EOF
+  cat > "$manifest_path" <<EOF
 {
   "name": "com.ucsd.podcast.downloader",
   "description": "UCSD Podcast Downloader native helper",
   "path": "$HOST_SCRIPT",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://$EXTENSION_ID/"
+    "chrome-extension://$extension_id/"
   ]
 }
 EOF
 
-echo "Installed host manifest:"
-echo "  $MANIFEST_PATH"
+  echo "[$browser_name] Installed host manifest:"
+  echo "  $manifest_path"
+  echo "  Allowed extension: chrome-extension://$extension_id/"
+  echo ""
+}
+
+if [[ -n "$CHROME_ID" ]]; then
+  install_for_browser "Chrome" \
+    "$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts" \
+    "$CHROME_ID"
+fi
+
+if [[ -n "$EDGE_ID" ]]; then
+  install_for_browser "Edge" \
+    "$HOME/Library/Application Support/Microsoft Edge/NativeMessagingHosts" \
+    "$EDGE_ID"
+fi
+
+echo "Host script: $HOST_SCRIPT"
 echo ""
-echo "Host script path:"
-echo "  $HOST_SCRIPT"
-echo ""
-echo "Allowed extension:"
-echo "  chrome-extension://$EXTENSION_ID/"
-echo ""
-echo "Now reload the extension at chrome://extensions and click 'Test Connection'."
+if [[ -n "$CHROME_ID" ]]; then
+  echo "Reload the extension at chrome://extensions, then click 'Test Connection'."
+fi
+if [[ -n "$EDGE_ID" ]]; then
+  echo "Reload the extension at edge://extensions, then click 'Test Connection'."
+fi
