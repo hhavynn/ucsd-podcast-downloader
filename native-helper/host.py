@@ -9,6 +9,15 @@ Chrome Native Messaging protocol (stdio):
 Chrome/Edge launches this process fresh for every native messaging session
 and kills it when the extension disconnects.
 """
+# Ultra-early startup signal written before any imports, so we can tell
+# whether the process launched at all vs crashed during module loading.
+import sys as _sys
+try:
+    with open("/tmp/ucsd_host_start.txt", "w") as _f:
+        _f.write(f"started python={_sys.version}\n")
+except Exception:
+    pass
+
 # Allows `X | Y` type hints on Python 3.9 (macOS ships 3.9 on older systems).
 from __future__ import annotations
 
@@ -37,11 +46,15 @@ os.environ["PATH"] = ":".join(
     _EXTRA_PATHS + [os.environ.get("PATH", "")]
 )
 
-# Log to stderr only - stdout is reserved for the Chrome message protocol.
+# Log to stderr AND /tmp (always writable) — the browser swallows stderr.
+_LOG_FILE = "/tmp/ucsd_host_debug.log"
 logging.basicConfig(
-    stream=sys.stderr,
     level=logging.DEBUG,
     format="[host.py] %(levelname)s %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stderr),
+        logging.FileHandler(_LOG_FILE, encoding="utf-8"),
+    ],
 )
 
 VERSION = "0.1.0"

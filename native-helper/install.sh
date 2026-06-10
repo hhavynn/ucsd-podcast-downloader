@@ -55,14 +55,24 @@ fi
 # Absolute path to this script's directory (where host.py lives).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST_SCRIPT="$SCRIPT_DIR/host.py"
+# Shell wrapper — browsers on macOS can fail to resolve the Python shebang in
+# their restricted launch environment, so we point the manifest at this wrapper
+# which calls python3 with an explicit absolute path instead.
+HOST_WRAPPER="$SCRIPT_DIR/run_host.sh"
 
 if [[ ! -f "$HOST_SCRIPT" ]]; then
   echo "Error: host.py not found at $HOST_SCRIPT"
   exit 1
 fi
 
-# Make host.py executable so browsers can launch it directly.
+if [[ ! -f "$HOST_WRAPPER" ]]; then
+  echo "Error: run_host.sh not found at $HOST_WRAPPER"
+  exit 1
+fi
+
+# Make both files executable.
 chmod +x "$HOST_SCRIPT"
+chmod +x "$HOST_WRAPPER"
 
 # Writes a host manifest for one browser into the given directory.
 install_for_browser() {
@@ -77,7 +87,7 @@ install_for_browser() {
 {
   "name": "com.ucsd.podcast.downloader",
   "description": "UCSD Podcast Downloader native helper",
-  "path": "$HOST_SCRIPT",
+  "path": "$HOST_WRAPPER",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://$extension_id/"
@@ -103,7 +113,8 @@ if [[ -n "$EDGE_ID" ]]; then
     "$EDGE_ID"
 fi
 
-echo "Host script: $HOST_SCRIPT"
+echo "Host script:   $HOST_SCRIPT"
+echo "Host wrapper:  $HOST_WRAPPER"
 echo ""
 if [[ -n "$CHROME_ID" ]]; then
   echo "Reload the extension at chrome://extensions, then click 'Test Connection'."
